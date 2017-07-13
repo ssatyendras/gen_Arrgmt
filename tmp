@@ -1,0 +1,105 @@
+#!/bin/bash
+
+confirm() {
+  echo "Press RETURN to continue, or ^C to cancel.";
+  read -e ignored
+}
+
+GIT='git'
+
+LTS="Ubuntu 10.04"
+ISSUE=`cat /etc/issue`
+if [[ $ISSUE != Ubuntu* ]]
+then
+  echo "This script is intended for use on Ubuntu, but this system appears";
+  echo "to be something else. Your results may vary.";
+  echo
+  confirm
+elif [[ `expr match "$ISSUE" "$LTS"` -eq ${#LTS} ]]
+then
+  GIT='git-core'
+fi
+
+echo "PHABRICATOR UBUNTU INSTALL SCRIPT";
+echo "This script will install Phabricator and all of its core dependencies.";
+echo "Run it from the directory you want to install into.";
+echo
+
+ROOT=`pwd`
+echo "Phabricator will be installed to: ${ROOT}.";
+confirm
+
+echo "Testing sudo..."
+sudo true
+if [ $? -ne 0 ]
+then
+  echo "ERROR: You must be able to sudo to run this script.";
+  exit 1;
+fi;
+
+echo "Installing dependencies: git, apache, mysql, php...";
+echo
+
+set +x
+
+sudo add-apt-repository ppa:ondrej/php
+sudo apt-get -qq update
+sudo apt-get install \
+  $GIT mysql-server apache2 dpkg-dev
+#   php7.0 php7.0-mysql php7.0-gd php7.0-dev php7.0-curl php-apcu php7.0-cli php7.0-json php7.0-dev php7.0-common libapache2-mod-php7.0
+# sudo a2dismod php7.0
+sudo apt install php5.6 libapache2-mod-php5.6 php5.6-curl php5.6-gd php5.6-mbstring php5.6-mcrypt php5.6-mysql php5.6-xml php5.6-xmlrpc
+sudo a2enmod php5.6
+
+sudo apt-get install php-apcu
+
+sudo apt-get install phpmyadmin
+sudo ln -s /usr/share/phpmyadmin/ /var/www/
+
+sudo apt-get install python-pygments
+
+# sudo apt-get install libpcre3 libpcre3-dev
+
+# Enable mod_rewrite
+sudo a2enmod rewrite
+
+HAVEPCNTL=`php -r "echo extension_loaded('pcntl');"`
+if [ $HAVEPCNTL != "1" ]
+then
+  echo "Installing pcntl...";
+  echo
+  apt-get source php5
+  PHP5=`ls -1F | grep '^php5-.*/$'`
+  (cd $PHP5/ext/pcntl && phpize && ./configure && make && sudo make install)
+else
+  echo "pcntl already installed";
+fi
+
+if [ ! -e libphutil ]
+then
+  sudo git clone https://github.com/phacility/libphutil.git
+else
+  (cd libphutil && git pull --rebase)
+fi
+
+if [ ! -e arcanist ]
+then
+  sudo git clone https://github.com/phacility/arcanist.git
+else
+  (cd arcanist && git pull --rebase)
+fi
+
+if [ ! -e phabricator ]
+then
+  sudo git clone https://github.com/phacility/phabricator.git
+else
+  (cd phabricator && git pull --rebase)
+fi
+
+echo
+echo
+echo "Install probably worked mostly correctly. Continue with the 'Configuration Guide':";
+echo
+echo "    https://secure.phabricator.com/book/phabricator/article/configuration_guide/";
+echo
+echo "You can delete any php5-* stuff that's left over in this directory if you want.";
